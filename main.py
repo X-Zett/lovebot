@@ -1,0 +1,28 @@
+import asyncio
+import logging
+from aiogram import Bot, Dispatcher
+from database.db import init_db
+from handlers import memories, other  # Наши новые файлы
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+async def main():
+    logging.basicConfig(level=logging.INFO)
+    
+    bot = Bot(token=os.getenv("BOT_TOKEN"))
+    dp = Dispatcher()
+
+    # Запуск базы
+    await init_db()
+
+    # Подключаем части бота
+    dp.include_router(memories.router)
+    dp.include_router(other.router)
+
+    print("🚀 Бот запущен локально на SQLite!")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
