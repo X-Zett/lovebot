@@ -2,8 +2,8 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from database.db import init_db
-from handlers import memories, other  # Наши новые файлы
 from dotenv import load_dotenv
+from handlers import memories, other, dates, common
 import os
 
 load_dotenv()
@@ -18,8 +18,10 @@ async def main():
     await init_db()
 
     # Подключаем части бота
+    dp.include_router(common.router) # Лучше регистрировать первым
     dp.include_router(memories.router)
     dp.include_router(other.router)
+    dp.include_router(dates.router)
 
     print("🚀 Бот запущен локально на SQLite!")
     await dp.start_polling(bot)

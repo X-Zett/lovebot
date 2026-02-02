@@ -21,6 +21,11 @@ async def init_db():
                 user_id BIGINT, 
                 text TEXT
             )''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS important_dates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                info TEXT
+            )''')
         await db.commit()
 
 # Универсальная функция для записи (чтобы не дублировать код в хендлерах)
@@ -35,6 +40,12 @@ async def fetch_one(query, params=()):
         db.row_factory = aiosqlite.Row
         async with db.execute(query, params) as cursor:
             return await cursor.fetchone()
+
+async def fetch_all(query, params=()):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(query, params) as cursor:
+            return await cursor.fetchall()
 
 async def fetch_val(query, params=()):
     async with aiosqlite.connect(DB_PATH) as db:
