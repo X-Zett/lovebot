@@ -10,7 +10,7 @@ from database.db import init_db
 from dotenv import load_dotenv
 
 # Импортируем роутеры (не забудь добавить reminders)
-from handlers import memories, other, dates, common, reminders
+from handlers import memories, other, dates, common, reminders, inline
 
 from middlewares.access import AccessMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -60,7 +60,8 @@ async def main():
     dp.include_router(common.router)
     dp.include_router(dates.router)
     dp.include_router(memories.router)
-    dp.include_router(reminders.router) # Новый роутер для напоминаний
+    dp.include_router(reminders.router)
+    dp.include_router(inline.router)
     dp.include_router(other.router)
 
     print("🚀 Бот успешно запущен на твоем Lenovo!")
