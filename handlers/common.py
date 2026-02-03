@@ -30,3 +30,36 @@ async def grant_access(message: types.Message):
         await message.answer(f"✅ Доступ для {name} (ID: {new_id}) открыт!")
     except:
         await message.answer("Ошибка! Пиши: /grant ID Имя")
+
+@router.message(Command("revoke"))
+async def revoke_access(message: types.Message):
+    # Только главный админ может отзывать доступ
+    if message.from_user.id != int(os.getenv("ADMIN_ID")):
+        return
+
+    try:
+        # Команда вида: /revoke 12345678
+        parts = message.text.split()
+        user_id_to_remove = int(parts[1])
+        
+        # Удаляем пользователя из таблицы
+        await execute_query("DELETE FROM authorized_users WHERE user_id = ?", (user_id_to_remove,))
+        await message.answer(f"🚫 Доступ для ID {user_id_to_remove} аннулирован.")
+    except (IndexError, ValueError):
+        await message.answer("Ошибка! Пиши: /revoke ID_пользователя")
+
+@router.message(Command("users"))
+async def list_authorized_users(message: types.Message):
+    if message.from_user.id != int(os.getenv("ADMIN_ID")):
+        return
+
+    from database.db import fetch_all
+    rows = await fetch_all("SELECT user_id, name FROM authorized_users")
+    
+    if rows:
+        text = "👥 <b>Разрешенные пользователи:</b>\n\n"
+        for row in rows:
+            text += f"• {row['name']} (<code>{row['user_id']}</code>)\n"
+        await message.answer(text, parse_mode="HTML")
+    else:
+        await message.answer("Список пуст (кроме главного админа).")
