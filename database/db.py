@@ -6,6 +6,11 @@ async def init_db():
     async with aiosqlite.connect(DB_PATH) as db:
         # Создаем все таблицы сразу
         await db.execute('''
+            CREATE TABLE IF NOT EXISTS authorized_users (
+                user_id INTEGER PRIMARY KEY,
+                name TEXT
+            )''')
+        await db.execute('''
             CREATE TABLE IF NOT EXISTS memories (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, 
                 file_id TEXT
@@ -27,6 +32,11 @@ async def init_db():
                 info TEXT
             )''')
         await db.commit()
+
+async def is_user_authorized(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT 1 FROM authorized_users WHERE user_id = ?", (user_id,)) as cursor:
+            return await cursor.fetchone() is not None
 
 # Универсальная функция для записи (чтобы не дублировать код в хендлерах)
 async def execute_query(query, params=()):
