@@ -31,6 +31,13 @@ async def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT, 
                 info TEXT
             )''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                text TEXT,
+                remind_at TIMESTAMP
+            )''')
         await db.commit()
 
 async def is_user_authorized(user_id: int):

@@ -6,6 +6,7 @@ def get_main_kb() -> ReplyKeyboardMarkup:
     # Добавляем кнопки
     kb.button(text="📸 Случайное фото")
     kb.button(text="🗓 Важные даты")
+    kb.button(text="⏰ Напоминания")
     kb.button(text="💰 Мой бюджет")
     kb.button(text="🤫 Желание")
     kb.button(text="🎲 Что выбрать?")
