@@ -30,20 +30,26 @@ async def daily_report(bot: Bot):
         )
 
 async def send_hourly_meme(bot: Bot):
-    # Проверяем текущий час (по времени сервера/ноутбука)
+    # Проверяем текущий час
     current_hour = datetime.now().hour
     
-    # "Тихий режим": работаем только с 9 до 23 включительно (00:00 — уже стоп)
+    # Тихий режим с 9:00 до 00:00
     if 9 <= current_hour < 24:
-        admin_id = os.getenv("ADMIN_ID")
+        # Пытаемся взять ID группы, если его нет — шлем админу
+        target_id = os.getenv("GROUP_ID") or os.getenv("ADMIN_ID")
+        
+        if not target_id:
+            logging.error("Не найден ни GROUP_ID, ни ADMIN_ID в .env")
+            return
+
         meme = await get_random_meme()
         
-        if meme and admin_id:
+        if meme:
             try:
                 await bot.send_photo(
-                    int(admin_id), 
+                    chat_id=int(target_id), 
                     photo=meme['url'], 
-                    caption = (
+                    caption=(
                         f"✨ <b>{meme['sub']}</b>\n"
                         f"───\n"
                         f"🤣 {meme['title']}"

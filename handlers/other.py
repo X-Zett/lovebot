@@ -101,3 +101,7 @@ async def show_favorites(message: types.Message):
 @router.message(F.text == "🔙 Назад")
 async def back_to_main(message: types.Message):
     await message.answer("Главное меню:", reply_markup=get_main_kb())
+
+@router.message(Command("id"))
+async def get_chat_id(message: types.Message):
+    await message.answer(f"ID этого чата: {message.chat.id}")
