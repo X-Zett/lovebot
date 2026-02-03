@@ -38,6 +38,13 @@ async def init_db():
                 text TEXT,
                 remind_at TIMESTAMP
             )''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS favorite_memes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                url TEXT,
+                title TEXT
+            )''')
         await db.commit()
 
 async def is_user_authorized(user_id: int):

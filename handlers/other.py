@@ -1,8 +1,11 @@
 import random
-from aiogram import Router, types, F # Добавили F
+from aiogram import Router, types, F
 from aiogram.filters import Command
 from database.db import execute_query, fetch_val, fetch_one
 from utils.memes import get_random_meme
+from keyboards.inline_memes import get_meme_actions_kb
+from keyboards.memes_kb import get_memes_submenu_kb
+from keyboards.main_menu import get_main_kb
 
 router = Router()
 
@@ -53,10 +56,44 @@ async def choose_random(message: types.Message):
     else:
         await message.answer("Напиши варианты через запятую, например:\n/choose Пицца, Роллы, Бургер")
 
-@router.message(F.text == "🤡 Рассмеши меня")
+@router.message(F.text == "🤡 Мемо-станция")
+async def show_memes_menu(message: types.Message):
+    await message.answer(
+        "Добро пожаловать в Мемо-станцию! 🎭\nЗдесь можно зарядиться позитивом.",
+        reply_markup=get_memes_submenu_kb()
+    )
+
+@router.message(F.text == "🎲 Рассмеши меня")
 async def send_meme_on_demand(message: types.Message):
     meme = await get_random_meme()
     if meme:
-        await message.answer_photo(photo=meme['url'], caption=meme['title'])
+        await message.answer_photo(
+            photo=meme['url'], 
+            caption=f"🤣 Мем по запросу:\n{meme['title']}",
+            reply_markup=get_meme_actions_kb()
+        )
     else:
-        await message.answer("Прости, мемовая шахта временно пуста 😔")
+        await message.answer("Мемы закончились, приходи позже!")
+
+# 3. Показать случайный мем из коллекции
+@router.message(F.text == "❤️ Моя коллекция")
+async def show_favorites(message: types.Message):
+    # Берем случайный мем из сохраненных для этого пользователя
+    row = await fetch_one(
+        "SELECT url, title FROM favorite_memes WHERE user_id = ? ORDER BY RANDOM() LIMIT 1", 
+        (message.from_user.id,)
+    )
+    
+    if row:
+        await message.answer_photo(
+            photo=row['url'], 
+            caption=f"⭐ Из вашей коллекции:\n{row['title']}",
+            reply_markup=get_meme_actions_kb() # Добавим кнопки и сюда, если захочешь удалить
+        )
+    else:
+        await message.answer("Ваша коллекция пока пуста. Нажимайте ❤️ под мемами, которые я присылаю!")
+
+# 4. Возврат в главное меню
+@router.message(F.text == "🔙 Назад")
+async def back_to_main(message: types.Message):
+    await message.answer("Главное меню:", reply_markup=get_main_kb())

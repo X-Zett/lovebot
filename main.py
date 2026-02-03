@@ -10,12 +10,13 @@ from database.db import init_db
 from dotenv import load_dotenv
 
 # Импортируем роутеры (не забудь добавить reminders)
-from handlers import memories, other, dates, common, reminders, inline
+from handlers import memories, other, dates, common, reminders, inline, meme_actions
 
 from middlewares.access import AccessMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime
 from utils.memes import get_random_meme
+from keyboards.inline_memes import get_meme_actions_kb
 
 load_dotenv()
 
@@ -42,7 +43,8 @@ async def send_hourly_meme(bot: Bot):
                 await bot.send_photo(
                     int(admin_id), 
                     photo=meme['url'], 
-                    caption=f"🤣 Мем часа:\n{meme['title']}"
+                    caption=f"🤣 Мем часа:\n{meme['title']}",
+                    reply_markup=get_meme_actions_kb()
                 )
             except Exception as e:
                 logging.error(f"Ошибка при отправке мема: {e}")
@@ -90,6 +92,7 @@ async def main():
     dp.include_router(memories.router)
     dp.include_router(reminders.router)
     dp.include_router(inline.router)
+    dp.include_router(meme_actions.router)
     dp.include_router(other.router)
 
     print("🚀 Бот успешно запущен на твоем Lenovo!")
