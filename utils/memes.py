@@ -7,10 +7,9 @@ async def get_random_meme():
     subreddits = [
         "me_irl",               # Жизненно и тревожно
         "relationshipmemes",    # Про любовь
-        "linguisticshumor",     # Про языки (английский/французский)
-        "bookmemes",            # Про книги
-        "gamingmemes",          # Про игры
+        "memes",
         "okbuddyretard",        # Абсурдный и "глупый" юмор
+        "adulting"
     ]
     
     selected_sub = random.choice(subreddits)
