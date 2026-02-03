@@ -2,6 +2,7 @@ import random
 from aiogram import Router, types, F # Добавили F
 from aiogram.filters import Command
 from database.db import execute_query, fetch_val, fetch_one
+from utils.memes import get_random_meme
 
 router = Router()
 
@@ -51,3 +52,11 @@ async def choose_random(message: types.Message):
         await message.answer(f"🎲 Судьба выбрала: {random.choice(options).strip()}")
     else:
         await message.answer("Напиши варианты через запятую, например:\n/choose Пицца, Роллы, Бургер")
+
+@router.message(F.text == "🤡 Рассмеши меня")
+async def send_meme_on_demand(message: types.Message):
+    meme = await get_random_meme()
+    if meme:
+        await message.answer_photo(photo=meme['url'], caption=meme['title'])
+    else:
+        await message.answer("Прости, мемовая шахта временно пуста 😔")

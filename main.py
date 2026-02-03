@@ -14,6 +14,8 @@ from handlers import memories, other, dates, common, reminders, inline
 
 from middlewares.access import AccessMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from datetime import datetime
+from utils.memes import get_random_meme
 
 load_dotenv()
 
@@ -25,6 +27,27 @@ async def daily_report(bot: Bot):
             int(admin_id), 
             "☀️ <b>Доброе утро!</b>\nБот работает исправно, не забудь проверить важные даты!"
         )
+
+async def send_hourly_meme(bot: Bot):
+    # Проверяем текущий час (по времени сервера/ноутбука)
+    current_hour = datetime.now().hour
+    
+    # "Тихий режим": работаем только с 9 до 23 включительно (00:00 — уже стоп)
+    if 9 <= current_hour < 24:
+        admin_id = os.getenv("ADMIN_ID")
+        meme = await get_random_meme()
+        
+        if meme and admin_id:
+            try:
+                await bot.send_photo(
+                    int(admin_id), 
+                    photo=meme['url'], 
+                    caption=f"🤣 Мем часа:\n{meme['title']}"
+                )
+            except Exception as e:
+                logging.error(f"Ошибка при отправке мема: {e}")
+    else:
+        logging.info(f"Тихий режим: сейчас {current_hour}:00, мем не отправлен.")
 
 async def main():
     # Настройка логирования
@@ -46,7 +69,12 @@ async def main():
     
     # Добавляем задачу: каждое утро в 09:00 (опционально)
     scheduler.add_job(daily_report, trigger='cron', hour=9, minute=0, args=[bot])
-    
+    scheduler.add_job(
+        send_hourly_meme, 
+        trigger='interval', 
+        hours=1, 
+        args=[bot]
+    )    
     # Стартуем планировщик
     scheduler.start()
 

@@ -10,7 +10,7 @@ def get_main_kb() -> ReplyKeyboardMarkup:
     kb.button(text="💰 Мой бюджет")
     kb.button(text="🤫 Желание")
     kb.button(text="🎲 Что выбрать?")
-    
+    kb.button(text="🤡 Рассмеши меня")
     # Настраиваем сетку: по 2 кнопки в ряд
     kb.adjust(2)
     
