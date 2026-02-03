@@ -69,7 +69,11 @@ async def send_meme_on_demand(message: types.Message):
     if meme:
         await message.answer_photo(
             photo=meme['url'], 
-            caption=f"🤣 Мем по запросу:\n{meme['title']}",
+            caption = (
+                f"✨ <b>{meme['sub']}</b>\n"
+                f"───\n"
+                f"🤣 {meme['title']}"
+            ),
             reply_markup=get_meme_actions_kb()
         )
     else:

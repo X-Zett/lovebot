@@ -43,7 +43,11 @@ async def send_hourly_meme(bot: Bot):
                 await bot.send_photo(
                     int(admin_id), 
                     photo=meme['url'], 
-                    caption=f"🤣 Мем часа:\n{meme['title']}",
+                    caption = (
+                        f"✨ <b>{meme['sub']}</b>\n"
+                        f"───\n"
+                        f"🤣 {meme['title']}"
+                    ),
                     reply_markup=get_meme_actions_kb()
                 )
             except Exception as e:

@@ -1,23 +1,32 @@
 import aiohttp
+import random
 import logging
 
 async def get_random_meme():
-    # Используем проверенное API для мемов
-    url = "https://meme-api.com/gimme/memes"
+    # Список сабреддитов под ваши интересы
+    subreddits = [
+        "me_irl",               # Жизненно и тревожно
+        "relationshipmemes",    # Про любовь
+        "linguisticshumor",     # Про языки (английский/французский)
+        "bookmemes",            # Про книги
+        "gamingmemes",          # Про игры
+        "okbuddyretard",        # Абсурдный и "глупый" юмор
+    ]
+    
+    selected_sub = random.choice(subreddits)
+    url = f"https://meme-api.com/gimme/{selected_sub}"
     
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=10) as response:
                 if response.status == 200:
                     data = await response.json()
-                    # Проверяем, что пришла картинка, а не видео/гифка (опционально)
                     return {
                         "url": data.get('url'),
-                        "title": data.get('title', 'Без названия')
+                        "title": data.get('title', 'Без названия'),
+                        "sub": selected_sub # Добавим, чтобы знать откуда мем
                     }
-                else:
-                    logging.error(f"API мемов ответило статусом: {response.status}")
-                    return None
+                return None
     except Exception as e:
-        logging.error(f"Ошибка при запросе к API мемов: {e}")
+        logging.error(f"Ошибка API: {e}")
         return None
