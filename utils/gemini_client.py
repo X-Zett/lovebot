@@ -39,39 +39,33 @@ async def ask_gemini(prompt: str, system_instruction: str = "") -> str:
             return "⏳ Сервера Google долго отвечают. Попробуй нажать кнопку еще раз через пару секунд."
         return f"⚠️ Ошибка ИИ: {str(e)}"
 
-async def generate_image(description: str) -> str:
+async def generate_image(description: str):
     """
-    Генерирует изображение на основе текстового описания.
-    Возвращает URL изображения.
+    Генерирует изображение через Gemini 2.5 Flash Image (Nano Banana).
     """
     try:
-        # Промпт для генерации изображения
-        image_prompt = (
-            f"Создай детализированную, атмосферную фэнтези-иллюстрацию в стиле D&D "
-            f"для следующей сцены: {description}. Учти, что это часть эпического, но "
-            f"иногда абсурдного приключения. Изображение должно точно соответствовать описанию."
-        )
+        # Улучшаем промпт для D&D стиля
+        refined_prompt = f"Fantasy D&D illustration, high quality digital art: {description}"
         
-        response = await image_model.generate_content_async(
-            image_prompt,
-            safety_settings=safety_settings,
-            request_options={"timeout": 75}
-        )
+        # В этой модели генерация идет через generate_content
+        # Но возвращается объект, содержащий данные изображения
+        response = await image_model.generate_content_async(refined_prompt)
         
-        # Предполагаем, что response.candidates[0].content.parts[0].image.uri содержит URL
-        # В реальной интеграции с Gemini Image API, ты получишь объект Image.
-        # Для Telegram тебе нужен будет URL или Base64.
-        # Если API выдает сразу URL:
+        # Проверяем, есть ли изображение в ответе
+        # Обычно это один из вариантов (candidates)
         if response.candidates and response.candidates[0].content.parts:
-            # Здесь может быть сложнее, API Gemini Image обычно возвращает объект Image
-            # который нужно либо сохранить локально, либо получить его прямую ссылку.
-            # Для тестовых целей пока вернем заглушку или условный URL.
-            # В реальной интеграции Image API может вернуть объект или Base64.
-            # Если это Base64, нужно будет его декодировать и загрузить в Telegram.
-            # Для упрощения, пока представим, что мы получаем URL:
-            return "https://picsum.photos/1280/720" # <--- Заглушка, пока не будет реального API
-        
-        return "https://picsum.photos/1280/720" # Заглушка, если что-то пошло не так
+            for part in response.candidates[0].content.parts:
+                if part.inline_data: # Если данные пришли в бинарном виде
+                    img_data = part.inline_data.data
+                    return BytesIO(img_data)
+                # Если API возвращает объект Image (зависит от версии SDK)
+                elif hasattr(part, 'image'):
+                    img_byte_arr = BytesIO()
+                    part.image.save(img_byte_arr, format='PNG')
+                    img_byte_arr.seek(0)
+                    return img_byte_arr
+
+        return None
     except Exception as e:
-        logging.error(f"Ошибка при генерации изображения: {e}")
-        return "https://picsum.photos/1280/720" # Заглушка при ошибке
+        print(f"Ошибка генерации Nano Banana: {e}")
+        return None
