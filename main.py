@@ -10,7 +10,7 @@ from database.db import init_db
 from dotenv import load_dotenv
 
 # Импортируем роутеры (не забудь добавить reminders)
-from handlers import memories, other, dates, common, reminders, inline, meme_actions, games, ai_chat
+from handlers import memories, other, dates, common, reminders, inline, meme_actions, games, ai_chat, dnd_game
 
 from middlewares.access import AccessMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -105,6 +105,7 @@ async def main():
     dp.include_router(meme_actions.router)
     dp.include_router(ai_chat.router)
     dp.include_router(games.router)
+    dp.include_router(dnd_game.router)
     dp.include_router(other.router)
 
     print("🚀 Бот успешно запущен на твоем Lenovo!")

@@ -45,6 +45,15 @@ async def init_db():
                 url TEXT,
                 title TEXT
             )''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS dnd_sessions (
+                user_id INTEGER PRIMARY KEY,
+                session_state TEXT,       -- JSON строка с текущим состоянием игры (промпт, последние действия)
+                players_data TEXT,        -- JSON строка с данными игроков (HP, инвентарь, класс)
+                current_location TEXT,    -- Последняя описанная локация (для изображений)
+                last_response TEXT,       -- Последний ответ ИИ (текст)
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )''')
         await db.commit()
 
 async def is_user_authorized(user_id: int):
