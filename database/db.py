@@ -54,6 +54,15 @@ async def init_db():
                 last_response TEXT,       -- Последний ответ ИИ (текст)
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )''')
+        await execute_query("""
+            CREATE TABLE IF NOT EXISTS detective_sessions (
+                user_id INTEGER PRIMARY KEY,
+                session_state TEXT,       -- История диалога (JSON)
+                clue_board TEXT,          -- Найденные улики (JSON)
+                trust_level INTEGER,      -- Уровень доверия (0-100)
+                last_response TEXT        -- Последний текст от ИИ
+            )
+            """)
         await db.commit()
 
 async def is_user_authorized(user_id: int):

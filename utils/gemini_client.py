@@ -40,32 +40,15 @@ async def ask_gemini(prompt: str, system_instruction: str = "") -> str:
         return f"⚠️ Ошибка ИИ: {str(e)}"
 
 async def generate_image(description: str):
-    """
-    Генерирует изображение через Gemini 2.5 Flash Image (Nano Banana).
-    """
     try:
-        # Улучшаем промпт для D&D стиля
-        refined_prompt = f"Fantasy D&D illustration, high quality digital art: {description}"
+        # Модель Nano Banana создает изображение прямо в ответе
+        response = await image_model.generate_content_async(description)
         
-        # В этой модели генерация идет через generate_content
-        # Но возвращается объект, содержащий данные изображения
-        response = await image_model.generate_content_async(refined_prompt)
-        
-        # Проверяем, есть ли изображение в ответе
-        # Обычно это один из вариантов (candidates)
-        if response.candidates and response.candidates[0].content.parts:
-            for part in response.candidates[0].content.parts:
-                if part.inline_data: # Если данные пришли в бинарном виде
-                    img_data = part.inline_data.data
-                    return BytesIO(img_data)
-                # Если API возвращает объект Image (зависит от версии SDK)
-                elif hasattr(part, 'image'):
-                    img_byte_arr = BytesIO()
-                    part.image.save(img_byte_arr, format='PNG')
-                    img_byte_arr.seek(0)
-                    return img_byte_arr
-
+        # Извлекаем байты из первого парта первого кандидата
+        for part in response.candidates[0].content.parts:
+            if part.inline_data:
+                return BytesIO(part.inline_data.data)
         return None
     except Exception as e:
-        print(f"Ошибка генерации Nano Banana: {e}")
+        logging.error(f"Nano Banana Error: {e}")
         return None
