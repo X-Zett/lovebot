@@ -105,8 +105,8 @@ async def main():
     dp.include_router(meme_actions.router)
     dp.include_router(ai_chat.router)
     dp.include_router(games.router)
-    dp.include_router(dnd_game.router)
     dp.include_router(detective.router)
+    dp.include_router(dnd_game.router)
     dp.include_router(other.router)
 
     print("🚀 Бот успешно запущен на твоем Lenovo!")

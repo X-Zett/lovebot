@@ -55,20 +55,24 @@ D. [Свой вариант]
 # --- КОМАНДЫ ---
 
 @router.message(Command("start_detective"))
-@router.message(F.text == "🕵️ Начать расследование") # Если добавишь в главное меню
+@router.message(F.text == "🕵️ Начать расследование")
 async def start_detective(message: types.Message):
     user_id = message.from_user.id
     
-    # Очистка старой сессии
+    # 1. Очистка и создание сессии
     await execute_query("DELETE FROM detective_sessions WHERE user_id = ?", (user_id,))
-    await execute_query(
-        "INSERT INTO detective_sessions (user_id, session_state, clue_board, trust_level) VALUES (?, ?, ?, ?)",
-        (user_id, json.dumps({"history": []}), "[]", 100)
-    )
     
     async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
         intro_prompt = "Сгенерируй новое запутанное дело: завязка, место преступления и первое описание."
+        # Передаем пустую историю
         response = await ask_gemini(intro_prompt, system_instruction=DETECTIVE_PROMPT_TEMPLATE)
+        
+        # 2. ВАЖНО: Сохраняем первый ответ ИИ в историю сразу при создании!
+        initial_history = [{"role": "model", "parts": [response]}]
+        await execute_query(
+            "INSERT INTO detective_sessions (user_id, session_state, clue_board, trust_level, last_response) VALUES (?, ?, ?, ?, ?)",
+            (user_id, json.dumps({"history": initial_history}), "[]", 100, response)
+        )
         
         await process_detective_response(message, response)
 
@@ -104,17 +108,29 @@ async def handle_detective_action(message: types.Message):
 async def process_detective_step(message: types.Message, user_input: str):
     user_id = message.from_user.id
     session = await fetch_one("SELECT session_state FROM detective_sessions WHERE user_id = ?", (user_id,))
-    history = json.loads(session['session_state']).get('history', [])
+    
+    # Загружаем текущую историю
+    history_data = json.loads(session['session_state'])
+    history = history_data.get('history', [])
 
     async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
-        history.append({"role": "user", "parts": [user_input]})
-        response_text = await ask_gemini(user_input, system_instruction=DETECTIVE_PROMPT_TEMPLATE)
+        # 1. Запрашиваем ответ, передавая накопленную историю
+        response_text = await ask_gemini(
+            prompt=user_input, 
+            history=history, 
+            system_instruction=DETECTIVE_PROMPT_TEMPLATE
+        )
         
-        # Сохранение истории
+        # 2. Обновляем историю: добавляем ход пользователя и ответ модели
+        history.append({"role": "user", "parts": [user_input]})
         history.append({"role": "model", "parts": [response_text]})
+        
+        # Ограничиваем историю (например, последние 12 сообщений), чтобы не перегружать токены
+        updated_history = history[-12:]
+        
         await execute_query(
             "UPDATE detective_sessions SET session_state = ?, last_response = ? WHERE user_id = ?", 
-            (json.dumps({"history": history[-10:]}), response_text, user_id)
+            (json.dumps({"history": updated_history}), response_text, user_id)
         )
         
         await process_detective_response(message, response_text)
