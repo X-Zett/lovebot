@@ -16,14 +16,19 @@ safety_settings = {
 }
 
 async def ask_gemini(prompt: str, system_instruction: str = "") -> str:
-    """
-    Универсальная функция: принимает промпт и (опционально) роль/настройку.
-    """
     try:
-        # Объединяем инструкцию и запрос
         full_query = f"{system_instruction}\n\nЗапрос пользователя: {prompt}" if system_instruction else prompt
         
-        response = await model.generate_content_async(full_query)
+        # Добавляем safety_settings в запрос
+        response = await model.generate_content_async(
+            full_query,
+            safety_settings=safety_settings
+        )
+        
+        # Проверка: если ответ всё равно пустой (бывает при технических сбоях)
+        if not response.candidates or not response.candidates[0].content.parts:
+            return "🤖 ИИ промолчал... Возможно, ситуация слишком абсурдна даже для него. Попробуй еще раз!"
+            
         return response.text
     except Exception as e:
         return f"⚠️ Ошибка ИИ: {str(e)}"

@@ -1,6 +1,7 @@
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from utils.gemini_client import ask_gemini
+from utils.helpers import answer_with_loading
 
 router = Router()
 
@@ -13,6 +14,9 @@ async def generic_ai_chat(message: types.Message):
         await message.answer("Напиши что-нибудь после команды /ai, и я отвечу!")
         return
 
-    # Здесь системная настройка уже другая — просто "полезный помощник"
-    response = await ask_gemini(user_text, system_instruction="")
-    await message.answer(response)
+    await answer_with_loading(
+        message, 
+        task_func=ask_gemini, 
+        prompt=user_text, 
+        system_instruction=""
+    )
