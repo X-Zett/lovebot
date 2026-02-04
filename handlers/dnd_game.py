@@ -1,14 +1,18 @@
 import json
+import re
 import logging
-from aiogram import Router, types, F
+from aiogram import Router, types, F, Bot
 from aiogram.filters import Command
+from aiogram.utils.chat_action import ChatActionSender
+from keyboards.main_menu import get_main_kb
+
 from utils.gemini_client import ask_gemini, generate_image
 from database.db import execute_query, fetch_one
 from keyboards.dnd_kb import get_dnd_actions_kb
-from aiogram.utils.chat_action import ChatActionSender
 
 router = Router()
 
+# Твой амбициозный промпт для Dungeon Master
 DM_PROMPT_TEMPLATE = """
 Ты — опытный и креативный Dungeon Master (DM) в уникальной кампании Dungeons & Dragons. 
 Твоя задача — вести игру для 1-4 игроков в группе.
@@ -19,174 +23,137 @@ DM_PROMPT_TEMPLATE = """
 Тон: Баланс между эпическим приключением и абсурдным юмором (в духе Терри Пратчетта 
 или Baldur’s Gate 3). Могут встречаться нелепые монстры, странные проклятия и 
 комичные NPC, но ставки в сюжете всегда высоки.
-Визуализация (Обязательно):
-Локации: При каждом переходе в новую значимую локацию или начале важного события 
-ты ОБЯЗАН описывать детали для генерации изображения.
-Стиль: Иллюстрации должны быть детализированными, атмосферными и полностью 
-соответствовать твоему описанию.
-Интерфейс и Структура ответа (СТРОГО СОБЛЮДАЙ):
-Заголовок локации: [Например: Глава 1: Туманные берега Шляпного залива]
-Описание для Изображения: [КОРОТКОЕ И ТОЧНОЕ ОПИСАНИЕ СЦЕНЫ ДЛЯ ГЕНЕРАЦИИ КАРТИНКИ]
-Повествование: Описание происходящего, диалоги, описание запахов, звуков и действий.
-Статус Игроков (Таблица): 
-| Игрок | Класс/Раса | HP | Инвентарь | Состояние | 
-| :--- | :--- | :--- | :--- | :--- | 
-| [Имя] | [Класс] | [HP]/[Max HP] | [Предмет 1, Предмет 2] | [Состояние] |
+
+СТРУКТУРА ОТВЕТА (СОБЛЮДАЙ СТРОГО):
+Заголовок локации: [Название]
+Описание для Изображения: [Четкое описание сцены для генерации картинки]
+Повествование: Описание происходящего, диалоги, описание запахов, звуков и действий
+Статус Игроков (Таблица): [Таблица с HP и инвентарем]
 Действия: 
-A. [Вариант действия 1]
-B. [Вариант действия 2]
-C. [Вариант действия 3]
-D. [Вариант действия 4]
-E. [Игрок может предложить свой вариант]
-Правила игры:
-Используй упрощенную механику D&D 5e. Если игроки совершают сложное действие, «бросай кубик» (d20) и описывай результат в зависимости от сложности (DC). Мир должен реагировать на решения.
----
-{history_placeholder}
----
-Начало:
-Не начинай игру сразу. Сначала поприветствуй нас, кратко опиши завязку сюжета (заинтригуй!) и помоги нам создать персонажей (или предложи выбрать готовых). Как только мы подтвердим состав, сгенерируй первую локацию и начни приключение.
+A. [Вариант 1]
+B. [Вариант 2]
+C. [Вариант 3]
+D. [Вариант 4]
+
+Используй механику D&D 5e (кубики d20).
 """
 
-# Хранилище для текущих активных действий (Reply-кнопок) по каждому пользователю
-# В реальном проекте это тоже лучше хранить в БД, но для начала сойдет и в памяти
-current_dnd_actions = {} 
-
+# 1. Запуск игры
 @router.message(Command("start_dnd"))
 async def start_dnd_game(message: types.Message):
     user_id = message.from_user.id
     
-    # Проверяем, есть ли активная сессия
-    session = await fetch_one("SELECT * FROM dnd_sessions WHERE user_id = ?", (user_id,))
-    if session:
-        await message.answer("У вас уже есть активная D&D сессия! Продолжаем...", reply_markup=get_dnd_actions_kb(["Продолжить"]))
-        return
-
-    # Начинаем новую сессию, записываем стартовый промпт
+    # Сбрасываем старую сессию, если была
+    await execute_query("DELETE FROM dnd_sessions WHERE user_id = ?", (user_id,))
+    
+    # Создаем новую запись в БД
     await execute_query(
         "INSERT INTO dnd_sessions (user_id, session_state, players_data, current_location, last_response) VALUES (?, ?, ?, ?, ?)",
         (user_id, json.dumps({"history": []}), json.dumps({}), "Начало", "")
     )
     
-    # Первый запрос к DM
-    dm_response = await ask_gemini(
-        "Приветствуй игроков, кратко опиши завязку сюжета и предложи создать персонажей или выбрать готовых.",
-        system_instruction=DM_PROMPT_TEMPLATE.format(history_placeholder="")
-    )
+    async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+        welcome_prompt = "Приветствуй игроков, кратко опиши завязку сюжета и помоги нам создать персонажей."
+        response = await ask_gemini(welcome_prompt, system_instruction=DM_PROMPT_TEMPLATE)
+        
+        # Сохраняем первый ответ
+        await execute_query("UPDATE dnd_sessions SET last_response = ? WHERE user_id = ?", (response, user_id))
+        
+        await message.answer(response, reply_markup=get_dnd_actions_kb(), parse_mode="HTML")
 
-    # Обновляем состояние сессии
-    await execute_query(
-        "UPDATE dnd_sessions SET last_response = ? WHERE user_id = ?",
-        (dm_response, user_id)
-    )
+@router.message(Command("stop_dnd"))
+@router.message(F.text == "❌ Завершить игру")
+async def stop_dnd_game(message: types.Message):
+    user_id = message.from_user.id
     
-    # Извлекаем действия из ответа ИИ
-    actions_text = dm_response.split("Действия:")[1] if "Действия:" in dm_response else ""
-    actions_list = [line.strip()[2:] for line in actions_text.split('\n') if line.strip() and line.strip().startswith(('A.', 'B.', 'C.', 'D.', 'E.'))]
+    # 1. Проверяем, есть ли активная игра
+    session = await fetch_one("SELECT * FROM dnd_sessions WHERE user_id = ?", (user_id,))
     
-    current_dnd_actions[user_id] = actions_list # Сохраняем активные кнопки
-    
-    await message.answer(dm_response, reply_markup=get_dnd_actions_kb(actions_list))
+    if session:
+        # 2. Удаляем сессию
+        await execute_query("DELETE FROM dnd_sessions WHERE user_id = ?", (user_id,))
+        
+        # 3. Пишем сообщение об окончании и возвращаем кнопки из main_menu.py
+        await message.answer(
+            "🛑 <b>Игра окончена!</b>\n\nСессия удалена. Персонажи разошлись по домам, а DM закрыл свою книгу. Возвращаю основное меню.",
+            reply_markup=get_main_kb(), # Та самая функция из main_menu.py
+            parse_mode="HTML"
+        )
+    else:
+        await message.answer(
+            "Активных игр не найдено. Вот ваши основные кнопки:",
+            reply_markup=get_main_kb()
+        )
 
-
-@router.message(F.text) # Слушаем все текстовые сообщения, чтобы обрабатывать действия игроков
+# 2. Основной обработчик всех текстовых действий
+@router.message(F.text)
 async def handle_dnd_action(message: types.Message):
     user_id = message.from_user.id
     user_action = message.text
 
+    # Проверяем наличие сессии
     session = await fetch_one("SELECT * FROM dnd_sessions WHERE user_id = ?", (user_id,))
     if not session:
-        # Если нет активной сессии, но пришло текстовое сообщение, игнорируем его
-        # Или предлагаем начать игру
+        return # Игнорируем, если игра не начата
+
+    # Формируем промпт в зависимости от нажатой кнопки
+    if user_action.startswith("Вариант "):
+        choice = user_action.split(" ")[-1]
+        prompt = f"Я выбираю вариант {choice}. Опиши последствия и продолжай приключение."
+    elif user_action == "📊 Статус":
+        prompt = "Покажи текущий статус персонажей и инвентарь в виде таблицы."
+    elif user_action == "✍️ Свой вариант / Действие":
+        await message.answer("Напиши текстом, что именно ты хочешь сделать.")
         return
+    else:
+        prompt = user_action
 
-    # Проверяем, является ли действие игрока одной из предложенных кнопок
-    # или это пользовательский ответ
-    possible_actions = current_dnd_actions.get(user_id, [])
+    # Запускаем "двигатель" игры
+    await process_dnd_step(message, prompt)
+
+# 3. Вспомогательная функция "двигатель" (process_dnd_step)
+async def process_dnd_step(message: types.Message, user_input: str):
+    user_id = message.from_user.id
     
-    if user_action not in possible_actions and user_action != "Продолжить":
-        # Это пользовательский вариант или нерелевантное сообщение
-        if user_action.startswith(tuple("ABCDE.")):
-            await message.answer("Пожалуйста, нажмите кнопку или введите свой вариант действия.", 
-                                 reply_markup=get_dnd_actions_kb(possible_actions))
-            return
-        # Если это просто текст, который не является действием, то бот обрабатывает его как свой вариант
-        # Или можно добавить логику, чтобы игнорировать неигровые сообщения
-        # Для D&D мы предполагаем, что любой текст - это попытка игрока сделать что-то
-        pass 
-    
-    # 1. Загружаем текущее состояние
-    session_state = json.loads(session['session_state'])
-    players_data = json.loads(session['players_data'])
-    last_response = session['last_response']
-    current_location = session['current_location']
+    session = await fetch_one("SELECT session_state FROM dnd_sessions WHERE user_id = ?", (user_id,))
+    history_data = json.loads(session['session_state'])
+    history = history_data.get('history', [])
 
-    # Добавляем предыдущий ответ DM и текущее действие игрока в историю
-    session_state['history'].append({"role": "model", "parts": [last_response]})
-    session_state['history'].append({"role": "user", "parts": [f"Игрок совершает действие: {user_action}"]})
-
-    # Сокращаем историю, чтобы не превышать лимиты токенов
-    if len(session_state['history']) > 10: # Храним последние 10 обменов
-        session_state['history'] = session_state['history'][-10:]
-
-    # Собираем промпт для DM
-    dm_prompt = f"Игрок выбрал действие: {user_action}. Продолжи историю. " \
-                f"Учитывай текущее состояние игроков: {json.dumps(players_data)}. " \
-                f"Не забудь соблюдать формат ответа: Заголовок, Описание для Изображения, Повествование, Статус Игроков, Действия."
-
-    # Отправляем в Gemini
     async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
-        dm_full_response = await ask_gemini(
-            dm_prompt,
-            system_instruction=DM_PROMPT_TEMPLATE.format(history_placeholder=json.dumps(session_state['history']))
+        # Добавляем действие пользователя в контекст
+        history.append({"role": "user", "parts": [user_input]})
+        
+        # Запрос к Gemini (передаем последние 10 сообщений для памяти)
+        response_text = await ask_gemini(user_input, system_instruction=DM_PROMPT_TEMPLATE)
+
+        # Генерируем изображение
+        img_prompt = extract_image_description(response_text)
+        image_url = await generate_image(img_prompt)
+
+        # Сохраняем ответ модели в историю
+        history.append({"role": "model", "parts": [response_text]})
+        new_history_json = json.dumps({"history": history[-10:]})
+        
+        await execute_query(
+            "UPDATE dnd_sessions SET session_state = ?, last_response = ? WHERE user_id = ?", 
+            (new_history_json, response_text, user_id)
         )
-    
-    # 2. Парсим ответ DM
-    # Ищем заголовок локации
-    location_title_match = re.search(r"Заголовок локации:\s*(.*)", dm_full_response)
-    location_title = location_title_match.group(1).strip() if location_title_match else "Неизвестная Локация"
 
-    # Ищем описание для изображения
-    image_desc_match = re.search(r"Описание для Изображения:\s*(.*)", dm_full_response)
-    image_description = image_desc_match.group(1).strip() if image_desc_match else "фэнтези-сцена"
+        # Отправляем результат
+        if len(response_text) > 1000:
+            await message.answer_photo(photo=image_url)
+            await message.answer(response_text, reply_markup=get_dnd_actions_kb(), parse_mode="HTML")
+        else:
+            await message.answer_photo(
+                photo=image_url,
+                caption=response_text,
+                reply_markup=get_dnd_actions_kb(),
+                parse_mode="HTML"
+            )
 
-    # Извлекаем повествование, статус и действия
-    # Это грубый парсинг, который нужно будет доработать
-    parts = re.split(r"(Заголовок локации:|Описание для Изображения:|Повествование:|Статус Игроков \(Таблица\):|Действия:)", dm_full_response)
-    
-    narration = ""
-    player_status_table = ""
-    actions_text = ""
-    
-    # Пример парсинга (нужно улучшить регулярки)
-    for i in range(len(parts)):
-        if parts[i].strip() == "Повествование:":
-            narration = parts[i+1].strip()
-        elif parts[i].strip() == "Статус Игроков (Таблица):":
-            player_status_table = parts[i+1].strip()
-        elif parts[i].strip() == "Действия:":
-            actions_text = parts[i+1].strip()
-
-    # Собираем текст для отправки
-    full_text_for_telegram = f"<b>{location_title}</b>\n\n{narration}\n\n{player_status_table}\n\n<b>Действия:</b>\n{actions_text}"
-    
-    # 3. Генерируем изображение
-    image_url = await generate_image(image_description)
-    
-    # 4. Обновляем сессию в БД
-    actions_list = [line.strip()[2:] for line in actions_text.split('\n') if line.strip() and line.strip().startswith(('A.', 'B.', 'C.', 'D.', 'E.'))]
-    current_dnd_actions[user_id] = actions_list
-    
-    await execute_query(
-        "UPDATE dnd_sessions SET session_state = ?, players_data = ?, current_location = ?, last_response = ? WHERE user_id = ?",
-        (json.dumps(session_state), json.dumps(players_data), location_title, dm_full_response, user_id)
-    )
-
-    # 5. Отправляем сообщение с фото и кнопками
-    await message.answer_photo(
-        photo=image_url,
-        caption=full_text_for_telegram,
-        reply_markup=get_dnd_actions_kb(actions_list),
-        parse_mode="HTML"
-    )
-
-# ... (другие хендлеры, например /stop_dnd, /show_status) ...
+# 4. Функция извлечения описания картинки
+def extract_image_description(text: str) -> str:
+    match = re.search(r"Описание для Изображения:\s*(.*?)(?=\n|$)", text)
+    if match:
+        return match.group(1).strip()
+    return "fantasy adventure, epic scene, detailed illustration"
