@@ -8,7 +8,7 @@ from google.generativeai.types import HarmCategory, HarmBlockThreshold
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-3-flash-preview') # Основная модель для текста
+# model = genai.GenerativeModel('gemini-3-flash-preview') # Основная модель для текста
 image_model = genai.GenerativeModel('gemini-2.5-flash-image') # Модель для изображений (названия могут меняться)
 
 
@@ -44,6 +44,10 @@ async def ask_gemini(prompt: str, history: list = None, system_instruction: str 
     try:        
         # Создаем сессию чата с переданной историей
         # Если истории нет, передаем пустой список
+        model = genai.GenerativeModel(
+            model_name='gemini-3-flash-preview',
+            system_instruction=system_instruction
+        )
         chat = model.start_chat(history=history or [])
         
         # Отправляем сообщение
